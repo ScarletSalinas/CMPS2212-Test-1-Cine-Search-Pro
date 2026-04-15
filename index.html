@@ -10,9 +10,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cine-Search Pro</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Welcome to Cine-Search Pro</h1>
-    <p>Your ultimate movie search engine.</p>
+    <header class="site-header">
+        <div class="header-top">
+            <h1>Cine-Search Pro</h1>
+            <p class="tagline">Your ultimate movie search engine.</p>
+            <input type="text" class="search-bar" placeholder="Search for movies...">
+        </div>
+    </header>
+
+    <main>
+        <!-- Search Results Section -->
+        <section class="search-results">
+            <article>
+                <h2>Results</h2>
+                <div class="results-container">
+                    <!-- Results will appear here -->
+                </div>
+            </article>
+        </section>
+
+        <!-- Movie Details Section -->
+        <section class="movie-details">
+            <article class="movie-card">
+                <div class="movie-info-grid">
+                    <div class="poster-box">
+                        <img src="" alt="Movie Poster" class="movie-poster">
+                    </div>
+                    <p class="meta-row"><strong>Title:</strong> <span class="meta-title"></span></p>
+                    <p class="meta-row"><strong>Year:</strong> <span class="meta-year"></span></p>
+                    <p class="meta-row"><strong>Genres:</strong> <span class="meta-genres"></span></p>
+                    <p class="meta-row"><strong>Directors:</strong> <span class="meta-directors"></span></p>
+                    <p class="meta-row"><strong>Cast:</strong> <span class="meta-cast"></span></p>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <!-- Template for search results (hidden until used) -->
+    <template id="movie-result-template">
+        <div class="result-item" data-movie-id="">
+            <h3 class="result-title"></h3>
+            <p class="result-year"></p>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
 </body>
 </html>
