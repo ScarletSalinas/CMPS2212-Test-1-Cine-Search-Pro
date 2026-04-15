@@ -20,6 +20,7 @@ class SearchComponent {
       // State
       this.cache = new Map(); // Cache for search results
       this.debounceTimer = null;
+      this.currentAbortController = null; // For cancelling in-flight requests    
       
       // API config
       this.apiKey = 'b6b1681d98a28ca6f7744913adc19360';
@@ -47,26 +48,27 @@ class SearchComponent {
       console.log('SearchComponent initialized');
   }
     
+  // Handle search input
+  handleSearch(event) {
+    const query = event.target.value.trim();
+
+    console.log('Search input changed:', query); // Log the current query for debugging
+    
+    if (query.length === 0) {
+        this.clearResults();
+        return;
+    }
+    
+    // Apply debounce of 300ms to search function
+    this.debounce(() => this.performSearch(query), 300)();
+  }
+
   // Debounce implementation
   debounce(func, delay) {
       return (...args) => {
-          clearTimeout(this.debounceTimer);
+          clearTimeout(this.debounceTimer); // Clear previous timer
           this.debounceTimer = setTimeout(() => func.apply(this, args), delay);
       };
-  }
-    
-  // Handle search input
-  handleSearch(event) {
-      const query = event.target.value.trim();
-      console.log('Search input changed:', query);
-      
-      if (query.length === 0) {
-          this.clearResults();
-          return;
-      }
-      
-      // Apply debounce of 300ms to search function
-      this.debounce(() => this.performSearch(query), 300)();
   }
     
   async performSearch(query) {
@@ -78,6 +80,16 @@ class SearchComponent {
       return;
     }
 
+    // Cancel previous request if still in-flight
+    if (this.currentAbortController) {
+      console.log('Aborting previous search request');
+      this.currentAbortController.abort();
+    }
+
+    // Create new AbortController for current request
+    this.currentAbortController = new AbortController();  
+    const signal = this.currentAbortController.signal;
+
     console.log(`Cache miss. Fetching results for query: ${query} from API.`);
     
     // Show loading spinner
@@ -85,7 +97,8 @@ class SearchComponent {
     
     try {
       const response = await fetch(
-        `${this.apiUrl}search/movie?api_key=${this.apiKey}&query=${encodeURIComponent(query)}`
+        `${this.apiUrl}search/movie?api_key=${this.apiKey}&query=${encodeURIComponent(query)}`,
+        { signal } // Pass the abort signal to fetch for cancellation support
       );
       
       if (!response.ok) {
@@ -103,13 +116,28 @@ class SearchComponent {
       this.renderResults(results);
           
     } catch (error) {
+      // Handle fetch errors gracefully
+
+      // abort errors are expected when cancelling previous requests, 
+      // so log them but don't show an error message to the user
+      if (error.name === 'AbortError') {
+        console.log('Search was cancelled');
+        return;
+      }
+      
       console.error('Error during search:', error);
+
       if (this.resultsContainer) {
         this.resultsContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
       }
     } finally {
       // Hide loading spinner
       document.body.setAttribute('data-loading', 'false');
+      
+      // Clear currentAbortController if it is current one
+      if (this.currentAbortController && this.currentAbortController.signal === signal) {
+        this.currentAbortController = null;
+      }
     }
   }
 
