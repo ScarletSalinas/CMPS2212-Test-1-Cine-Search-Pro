@@ -141,12 +141,12 @@ class SearchComponent {
     }
   }
 
-  // Handle movie selection 
-  async selectMoveie(movieId) {
+  // Handle movie selection and fetch all detail endpoints in parallel.
+  async selectMovie(movieId) {
     console.log(`Movie selected with ID: ${movieId}`); // Log the selected movie ID for debugging
 
     // Show loading spinner
-    this.showDetailsLoading(true);
+    this.showDetailsLoading();
 
     // Create fetch promise for movie details
     const detailsPromise = fetch(`${this.apiUrl}movie/${movieId}?api_key=${this.apiKey}`);
@@ -176,20 +176,20 @@ class SearchComponent {
     // Handle Credits
     if (results[1].status === 'fulfilled' && results[1].value.ok) {
         credits = await results[1].value.json();
-        console.log('✅ Credits loaded');
+        console.log('Credits loaded');
     } else {
-        console.warn('❌ Failed to load credits');
+        console.warn('Failed to load credits');
     }
     
     // Handle Videos
     if (results[2].status === 'fulfilled' && results[2].value.ok) {
         videos = await results[2].value.json();
-        console.log('✅ Videos loaded');
+        console.log('Videos loaded');
     } else {
-        console.warn('❌ Failed to load videos');
+        console.warn('Failed to load videos');
     }
     
-    // Render whatever detail we got - this is the resilience proof
+    // Render the details with whatever requests succeeded.
     this.renderMovieDetails(movieDetails, credits, videos);
   }
 
@@ -202,6 +202,7 @@ class SearchComponent {
     const directorSpan = document.querySelector('.meta-directors');
     const castSpan = document.querySelector('.meta-cast');
     const posterImg = document.querySelector('.movie-poster');
+    const trailerContainer = document.getElementById('trailer-container');
     
     if (titleSpan) titleSpan.textContent = 'Loading...';
     if (yearSpan) yearSpan.textContent = 'Loading...';
@@ -209,10 +210,14 @@ class SearchComponent {
     if (directorSpan) directorSpan.textContent = 'Loading...';
     if (castSpan) castSpan.textContent = 'Loading...';
     if (posterImg) posterImg.src = '';
+    if (trailerContainer) {
+      // Keep trailer section in sync with details loading state.
+      trailerContainer.innerHTML = '<p class="no-trailer">Loading trailers...</p>';
+    }
   }
 
   renderMovieDetails(details, credits, videos) {
-    console.log('🎨 Rendering movie details with available data');
+    console.log('Rendering movie details with available data');
     
     // Update title
     const titleSpan = document.querySelector('.meta-title');
@@ -262,8 +267,84 @@ class SearchComponent {
     } else if (posterImg) {
         posterImg.alt = 'Poster not available';
     }
+
+    // Render trailer cards after core metadata is painted.
+    this.renderTrailers(videos);
     
-    console.log('✅ Movie details rendered');
+    console.log('Movie details rendered');
+  }
+
+  renderTrailers(videos) {
+    const trailerContainer = document.getElementById('trailer-container');
+
+    if (!trailerContainer) {
+      return;
+    }
+
+    // Show loading if videos not yet loaded
+    if (!videos) {
+        trailerContainer.innerHTML = '<p class="no-trailer">Loading trailers...</p>';
+        return;
+    }
+
+    const allVideos = Array.isArray(videos?.results) ? videos.results : [];
+
+    // Prefer YouTube trailers first, then teasers as fallback.
+    const preferredVideos = allVideos.filter((video) => {
+      if (!video?.key || video.site !== 'YouTube') {
+        return false;
+      }
+      return video.type === 'Trailer' || video.type === 'Teaser';
+    });
+
+    // Limit: 3, so the section stays compact.
+    const selectedVideos = preferredVideos.slice(0, 3);
+
+    if (!selectedVideos.length) {
+      trailerContainer.innerHTML = '<p class="no-trailer">No trailers available for this title.</p>';
+      return;
+    }
+
+    // Replace previous movie trailers before rendering new ones.
+    trailerContainer.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+
+    selectedVideos.forEach((video) => {
+      const trailerCard = document.createElement('button');
+      trailerCard.type = 'button';
+      trailerCard.className = 'trailer-item';
+      trailerCard.setAttribute('aria-label', `Open trailer: ${video.name || 'Untitled trailer'}`);
+
+      const thumbnail = document.createElement('img');
+      thumbnail.src = `https://img.youtube.com/vi/${video.key}/mqdefault.jpg`;
+      thumbnail.alt = `${video.name || 'Trailer'} thumbnail`;
+      thumbnail.style.width = '100%';
+      thumbnail.style.borderRadius = '6px';
+      thumbnail.style.marginBottom = '0.5rem';
+
+      const trailerName = document.createElement('div');
+      trailerName.className = 'trailer-name';
+      trailerName.textContent = video.name || 'Untitled trailer';
+
+      const trailerType = document.createElement('div');
+      trailerType.className = 'trailer-type';
+      trailerType.textContent = `${video.type || 'Video'} • YouTube`;
+
+      trailerCard.appendChild(thumbnail);
+      trailerCard.appendChild(trailerName);
+      trailerCard.appendChild(trailerType);
+
+      trailerCard.addEventListener('click', () => {
+        // Open in a new tab to keep app state and scroll position intact.
+        const trailerUrl = `https://www.youtube.com/watch?v=${video.key}`;
+        window.open(trailerUrl, '_blank', 'noopener,noreferrer');
+      });
+
+      fragment.appendChild(trailerCard);
+    });
+
+    trailerContainer.appendChild(fragment);
   }
 
   // Render search results
@@ -303,7 +384,7 @@ class SearchComponent {
         // Add click handler to each result item
         resultDiv.addEventListener('click', (event) => {
           event.preventDefault();
-          this.selectMoveie(movie.id);
+          this.selectMovie(movie.id);
         });
       }
 
