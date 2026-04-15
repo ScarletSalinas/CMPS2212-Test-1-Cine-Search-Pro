@@ -141,6 +141,131 @@ class SearchComponent {
     }
   }
 
+  // Handle movie selection 
+  async selectMoveie(movieId) {
+    console.log(`Movie selected with ID: ${movieId}`); // Log the selected movie ID for debugging
+
+    // Show loading spinner
+    this.showDetailsLoading(true);
+
+    // Create fetch promise for movie details
+    const detailsPromise = fetch(`${this.apiUrl}movie/${movieId}?api_key=${this.apiKey}`);
+    const creditsPromise = fetch(`${this.apiUrl}movie/${movieId}/credits?api_key=${this.apiKey}`);
+    const videosPromise = fetch(`${this.apiUrl}movie/${movieId}/videos?api_key=${this.apiKey}`);
+
+    // Use Promise.allSettled - continues even if some fail
+    const results = await Promise.allSettled([
+        detailsPromise,
+        creditsPromise,
+        videosPromise
+    ]);
+
+    // Process each result (some may be rejected)
+    let movieDetails = null;
+    let credits = null;
+    let videos = null;
+    
+    // Handle Movie Details
+    if (results[0].status === 'fulfilled' && results[0].value.ok) {
+        movieDetails = await results[0].value.json();
+        console.log('Movie details loaded');
+    } else {
+        console.warn('Failed to load movie details');
+    }
+
+    // Handle Credits
+    if (results[1].status === 'fulfilled' && results[1].value.ok) {
+        credits = await results[1].value.json();
+        console.log('✅ Credits loaded');
+    } else {
+        console.warn('❌ Failed to load credits');
+    }
+    
+    // Handle Videos
+    if (results[2].status === 'fulfilled' && results[2].value.ok) {
+        videos = await results[2].value.json();
+        console.log('✅ Videos loaded');
+    } else {
+        console.warn('❌ Failed to load videos');
+    }
+    
+    // Render whatever detail we got - this is the resilience proof
+    this.renderMovieDetails(movieDetails, credits, videos);
+  }
+
+  // Show loading state in details section
+  showDetailsLoading() {
+    // Clear existing content and show loading
+    const titleSpan = document.querySelector('.meta-title');
+    const yearSpan = document.querySelector('.meta-year');
+    const genresSpan = document.querySelector('.meta-genres');
+    const directorSpan = document.querySelector('.meta-directors');
+    const castSpan = document.querySelector('.meta-cast');
+    const posterImg = document.querySelector('.movie-poster');
+    
+    if (titleSpan) titleSpan.textContent = 'Loading...';
+    if (yearSpan) yearSpan.textContent = 'Loading...';
+    if (genresSpan) genresSpan.textContent = 'Loading...';
+    if (directorSpan) directorSpan.textContent = 'Loading...';
+    if (castSpan) castSpan.textContent = 'Loading...';
+    if (posterImg) posterImg.src = '';
+  }
+
+  renderMovieDetails(details, credits, videos) {
+    console.log('🎨 Rendering movie details with available data');
+    
+    // Update title
+    const titleSpan = document.querySelector('.meta-title');
+    if (titleSpan) {
+        titleSpan.textContent = details?.title || 'Not available';
+    }
+    
+    // Update year
+    const yearSpan = document.querySelector('.meta-year');
+    if (yearSpan && details?.release_date) {
+        yearSpan.textContent = details.release_date.split('-')[0];
+    } else if (yearSpan) {
+        yearSpan.textContent = 'N/A';
+    }
+
+    // Update genres
+    const genresSpan = document.querySelector('.meta-genres');
+    if (genresSpan && details?.genres) {
+        genresSpan.textContent = details.genres.map(g => g.name).join(', ');
+    } else if (genresSpan) {
+        genresSpan.textContent = 'Not available';
+    }
+    
+    // Update directors (from crew)
+    const directorSpan = document.querySelector('.meta-directors');
+    if (directorSpan && credits?.crew) {
+        const directors = credits.crew.filter(person => person.job === 'Director');
+        directorSpan.textContent = directors.map(d => d.name).join(', ') || 'None listed';
+    } else if (directorSpan) {
+        directorSpan.textContent = 'Not available';
+    }
+    
+    // Update cast (top 5)
+    const castSpan = document.querySelector('.meta-cast');
+    if (castSpan && credits?.cast) {
+        const topCast = credits.cast.slice(0, 5).map(c => c.name).join(', ');
+        castSpan.textContent = topCast || 'None listed';
+    } else if (castSpan) {
+        castSpan.textContent = 'Not available';
+    }
+
+    // Update poster
+    const posterImg = document.querySelector('.movie-poster');
+    if (posterImg && details?.poster_path) {
+        posterImg.src = `https://image.tmdb.org/t/p/w200${details.poster_path}`;
+        posterImg.alt = details.title || 'Movie poster';
+    } else if (posterImg) {
+        posterImg.alt = 'Poster not available';
+    }
+    
+    console.log('✅ Movie details rendered');
+  }
+
   // Render search results
   renderResults(movies) {
     if (!movies.length) {
@@ -171,11 +296,20 @@ class SearchComponent {
 
       if (titleElement) titleElement.textContent = movie.title || 'No Title';
       if (yearElement) yearElement.textContent = movie.release_date ? movie.release_date.split('-')[0] : 'N/A';
-      if (resultDiv) resultDiv.setAttribute('data-movie-id', movie.id); // Store movie ID for later use
 
-      // Append to fragment
-      fragment.appendChild(clone);  
-    });
+      if (resultDiv) {
+        resultDiv.setAttribute('data-movie-id', movie.id); 
+
+        // Add click handler to each result item
+        resultDiv.addEventListener('click', (event) => {
+          event.preventDefault();
+          this.selectMoveie(movie.id);
+        });
+      }
+
+        // Append to fragment
+        fragment.appendChild(clone);  
+      });
 
     // Clear ansd append all at once
     this.resultsContainer.innerHTML = '';
