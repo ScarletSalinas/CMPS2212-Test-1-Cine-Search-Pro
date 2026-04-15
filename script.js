@@ -7,45 +7,92 @@
 
 class SearchComponent {
   constructor() {
-      console.log('Constructor starting...');
+    console.log('Constructor starting...');
+    
+    // DOM elements
+    this.searchInput = document.querySelector('.search-bar');
+    this.resultsContainer = document.querySelector('.results-container');
+    
+    // Log to debug
+    console.log('Search input found:', this.searchInput);
+    console.log('Results container found:', this.resultsContainer);
+
+    // Keyboard navigation state
+    this.selectedIndex = -1; // currently selected index for keyboard navigation
+    this.currentResults = []; // store current search results for keyboard navigation 
+    
+    // State
+    this.cache = new Map(); // Cache for search results
+    this.debounceTimer = null;
+    this.currentAbortController = null; // For cancelling in-flight requests    
       
-      // DOM elements
-      this.searchInput = document.querySelector('.search-bar');
-      this.resultsContainer = document.querySelector('.results-container');
-      
-      // Log to debug
-      console.log('Search input found:', this.searchInput);
-      console.log('Results container found:', this.resultsContainer);
-      
-      // State
-      this.cache = new Map(); // Cache for search results
-      this.debounceTimer = null;
-      this.currentAbortController = null; // For cancelling in-flight requests    
-      
-      // API config
-      this.apiKey = 'b6b1681d98a28ca6f7744913adc19360';
-      this.apiUrl = 'https://api.themoviedb.org/3/';
-      
-      // Bind methods
-      this.handleSearch = this.handleSearch.bind(this);
-      
-      // Initialize
-      this.init();
+    // API config
+    this.apiKey = 'b6b1681d98a28ca6f7744913adc19360';
+    this.apiUrl = 'https://api.themoviedb.org/3/';
+    
+    // Bind methods
+    this.handleSearch = this.handleSearch.bind(this);
+    
+    // Initialize
+    this.init();
   }
     
   init() {
-      // Loading attribute for css spinner
-      document.body.setAttribute('data-loading', 'false');
-      
-      // Check if elements exist before adding listener
-      if (this.searchInput) {
-          this.searchInput.addEventListener('input', this.handleSearch);
-          console.log('Event listener added to search input');
+    // Loading attribute for css spinner
+    document.body.setAttribute('data-loading', 'false');
+    
+    // Check if elements exist before adding listener
+    if (this.searchInput) {
+        this.searchInput.addEventListener('input', this.handleSearch);
+        this.searchInput.addEventListener('keydown', this.handleKeyNavigation.bind(this)); // Add keyboard navigation listener
+        console.log('Event listeners added to search input');
+    } else {
+        console.error('Search input not found! Check HTML class name.');
+    }
+    
+    console.log('SearchComponent initialized');
+  }
+
+  // Handle keyboard navigation 
+  handleKeyNavigation(event) {
+    // Get all visible result items
+    const resultItems = document.querySelectorAll('.result-item');
+    
+    if (resultItems.length === 0) return;
+    
+    switch(event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.selectedIndex = Math.min(this.selectedIndex + 1, resultItems.length - 1);
+        this.updateSelectedResult(resultItems);
+        break;
+          
+      case 'ArrowUp':
+        event.preventDefault();
+        this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+        this.updateSelectedResult(resultItems);
+        break;
+          
+      case 'Enter':
+        event.preventDefault();
+        if (this.selectedIndex >= 0 && this.currentResults[this.selectedIndex]) {
+            const selectedMovie = this.currentResults[this.selectedIndex];
+            this.selectMovie(selectedMovie.id);
+        }
+        break;
+    }
+  }
+
+  // Update visual highlighting for keyboard navigation
+  updateSelectedResult(resultItems) {
+    resultItems.forEach((item, index) => {
+      if (index === this.selectedIndex) {
+        item.classList.add('active');
+        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } else {
-          console.error('Search input not found! Check HTML class name.');
+        item.classList.remove('active');
       }
-      
-      console.log('SearchComponent initialized');
+    });
   }
     
   // Handle search input
@@ -347,12 +394,57 @@ class SearchComponent {
     trailerContainer.appendChild(fragment);
   }
 
+  // XSS-safe text highlighting - uses textContent, not innerHTML
+  createHighlightedText(text, query) {
+    const container = document.createElement('span');
+    
+    if (!query || query.trim() === '') {
+      container.textContent = text;
+      return container;
+    }
+    
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const index = lowerText.indexOf(lowerQuery);
+    
+    if (index === -1) {
+      container.textContent = text;
+      return container;
+    }
+    
+    // Split into before, match, and after
+    const beforeText = text.substring(0, index);
+    const matchText = text.substring(index, index + query.length);
+    const afterText = text.substring(index + query.length);
+    
+    // Create elements using textContent ONLY (safe from XSS)
+    const before = document.createElement('span');
+    before.textContent = beforeText;
+    
+    const match = document.createElement('span');
+    match.className = 'highlight';
+    match.textContent = matchText;  // SAFE: textContent, not innerHTML
+    
+    const after = document.createElement('span');
+    after.textContent = afterText;
+    
+    container.appendChild(before);
+    container.appendChild(match);
+    container.appendChild(after);
+    
+    return container;
+  }
+
   // Render search results
   renderResults(movies) {
     if (!movies.length) {
       this.resultsContainer.innerHTML = '<p>No movies found.</p>';
       return;
     }
+
+    // Store for keyboard navigation
+    this.currentResults = movies;
+    this.selectedIndex = -1;  // Reset selection
 
     // Get template
     const template = document.getElementById('movie-result-template');
@@ -366,17 +458,32 @@ class SearchComponent {
     // Create DocumentFragment
     const fragment = document.createDocumentFragment();
 
+    // Get current search term for highlighting
+    const searchTerm = this.searchInput.value.trim();
+
     // Build all results in memory
     movies.forEach(movie => {
       const clone = template.content.cloneNode(true);
 
-      // Set text content - no innerHTML to avoid XSS
+      // Get elements
       const titleElement = clone.querySelector('.result-title');
       const yearElement = clone.querySelector('.result-year');
       const resultDiv = clone.querySelector('.result-item');
 
+      // Set Year
       if (titleElement) titleElement.textContent = movie.title || 'No Title';
       if (yearElement) yearElement.textContent = movie.release_date ? movie.release_date.split('-')[0] : 'N/A';
+
+      // Set title WITH highlighting (XSS-safe)
+      if (titleElement) {
+        if (searchTerm && movie.title) {
+          const highlightedTitle = this.createHighlightedText(movie.title, searchTerm);
+          titleElement.innerHTML = ''; // Clear
+          titleElement.appendChild(highlightedTitle);
+        } else {
+          titleElement.textContent = movie.title || 'No Title';
+        }
+      }
 
       if (resultDiv) {
         resultDiv.setAttribute('data-movie-id', movie.id); 
@@ -399,7 +506,6 @@ class SearchComponent {
     console.log(`Rendered ${movies.length} results using Fragment pattern`);
     
   }
-
 
   // Clear previous results
   clearResults() {
