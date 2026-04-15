@@ -297,6 +297,20 @@ h2 {
   grid-column: span 2;
 }
 
+/* Overview styling*/
+.overview-row {
+    grid-column: span 2;  /* Make overview span both columns */
+    background: #f8fafc;
+}
+
+.meta-overview {
+    line-height: 1.5;
+    font-size: 0.9rem;
+    display: block;
+    margin-top: 0.25rem;
+}
+
+
 /* Trailer Section */
 .trailer-section {
   margin-top: 1rem;

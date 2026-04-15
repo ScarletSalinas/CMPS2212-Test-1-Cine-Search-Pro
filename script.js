@@ -200,6 +200,9 @@ class SearchComponent {
     const creditsPromise = fetch(`${this.apiUrl}movie/${movieId}/credits?api_key=${this.apiKey}`);
     const videosPromise = fetch(`${this.apiUrl}movie/${movieId}/videos?api_key=${this.apiKey}`);
 
+    //// Add 'xxx' to break it
+    //const videosPromise = fetch(`${this.apiUrl}movie/${movieId}/videosxxx?...`);
+
     // Use Promise.allSettled - continues even if some fail
     const results = await Promise.allSettled([
         detailsPromise,
@@ -244,6 +247,7 @@ class SearchComponent {
   showDetailsLoading() {
     // Clear existing content and show loading
     const titleSpan = document.querySelector('.meta-title');
+    const overviewSpan = document.querySelector('.meta-overview');  // for overview loading state
     const yearSpan = document.querySelector('.meta-year');
     const genresSpan = document.querySelector('.meta-genres');
     const directorSpan = document.querySelector('.meta-directors');
@@ -252,6 +256,7 @@ class SearchComponent {
     const trailerContainer = document.getElementById('trailer-container');
     
     if (titleSpan) titleSpan.textContent = 'Loading...';
+    if (overviewSpan) overviewSpan.textContent = 'Loading...';  
     if (yearSpan) yearSpan.textContent = 'Loading...';
     if (genresSpan) genresSpan.textContent = 'Loading...';
     if (directorSpan) directorSpan.textContent = 'Loading...';
@@ -270,6 +275,14 @@ class SearchComponent {
     const titleSpan = document.querySelector('.meta-title');
     if (titleSpan) {
         titleSpan.textContent = details?.title || 'Not available';
+    }
+
+    // Update overview (description) - right under title
+    const overviewSpan = document.querySelector('.meta-overview');
+    if (overviewSpan && details?.overview) {
+        overviewSpan.textContent = details.overview;
+    } else if (overviewSpan) {
+        overviewSpan.textContent = 'No overview available';
     }
     
     // Update year
@@ -344,8 +357,8 @@ class SearchComponent {
       return video.type === 'Trailer' || video.type === 'Teaser';
     });
 
-    // Limit: 3, so the section stays compact.
-    const selectedVideos = preferredVideos.slice(0, 3);
+    // Limit: 2, so the section stays compact.
+    const selectedVideos = preferredVideos.slice(0, 2);
 
     if (!selectedVideos.length) {
       trailerContainer.innerHTML = '<p class="no-trailer">No trailers available for this title.</p>';
