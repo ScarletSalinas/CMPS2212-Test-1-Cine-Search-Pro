@@ -12,6 +12,7 @@ Build a production-grade movie search dashboard using Vanilla JS and Raw CSS. De
 ├── style.css          # Responsive grid layout, movie details, trailer cards
 ├── script.js          # SearchComponent class with all features
 └── README.md          # Project documentation
+```
 
 # Link to video demo
 [Watch demo here]()
